@@ -9,6 +9,7 @@ import org.gradle.api.tasks.TaskAction
 
 import java.nio.file.Path
 import java.nio.file.Paths
+import java.util.regex.Matcher
 
 import static com.orctom.gradle.archetype.ConflictResolutionStrategy.*
 
@@ -83,7 +84,7 @@ class ArchetypeTask extends DefaultTask {
     String normalizedPackageName = packageName.replaceAll('//', '/')
 
     binding.put('packageName', normalizedPackageName.replaceAll('\\W', '.'))
-    binding.put('packagePath', normalizedPackageName.replaceAll('\\W', File.separator))
+    binding.put('packagePath', normalizedPackageName.replaceAll('\\W', Matcher.quoteReplacement(File.separator)))
 
     // process command line
     String extraProperties = System.getProperty("sun.java.command")

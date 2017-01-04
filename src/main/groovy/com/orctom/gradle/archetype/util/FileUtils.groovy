@@ -8,6 +8,7 @@ import org.gradle.api.logging.Logging
 
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
+import java.util.regex.Matcher
 
 import static com.orctom.gradle.archetype.ConflictResolutionStrategy.FAIL
 import static com.orctom.gradle.archetype.ConflictResolutionStrategy.OVERWRITE
@@ -82,7 +83,8 @@ class FileUtils {
 
         // apply variable substitution to path
         File target = new File(targetDir, resolvePaths(getRelativePath(sourceDir, source)))
-        String path = engine.createTemplate(target.path).make(binding)
+        String quotedPath = target.path.replaceAll() // TODO : replace delimiters with esacped ones
+        String path = engine.createTemplate(Matcher.quoteReplacement(target.path)).make(binding)
         target = new File(path)
 
         if (source.isFile()) {
@@ -193,7 +195,7 @@ class FileUtils {
     }
 
     String path = '';
-    pathAsString.split(File.separator).each {
+    pathAsString.split(Matcher.quoteReplacement(File.separator)).each {
       if (it.contains('__')) {
         path += resolvePath(it)
       } else {
