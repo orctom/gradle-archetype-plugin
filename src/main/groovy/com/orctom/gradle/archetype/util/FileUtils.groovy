@@ -83,14 +83,15 @@ class FileUtils {
 
         // apply variable substitution to path
         File target = new File(targetDir, resolvePaths(getRelativePath(sourceDir, source)))
-        String quotedPath = target.path.replaceAll() // TODO : replace delimiters with esacped ones
-        String path = engine.createTemplate(Matcher.quoteReplacement(target.path)).make(binding)
+        // replace delimiters with escaped ones
+        String quotedPath = target.path.replaceAll(File.separator,Matcher.quoteReplacement(File.separator))
+        String path = engine.createTemplate(quotedPath).make(binding)
         target = new File(path)
 
         if (source.isFile()) {
 
           // ensure ancestor dirs exist
-          target.mkdirs();
+          target.parentFile.mkdirs();
 
           if (isNonTemplate(source, nonTemplates)) {
             writeNonTemplate(target, source, strategy, filesWritten)
