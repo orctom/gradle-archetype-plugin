@@ -17,7 +17,9 @@ import java.util.regex.Pattern
 class FileUtils {
 
   static final Logger LOGGER = Logging.getLogger(FileUtils.class)
-  static final Pattern TRUTH_PATTERN = Pattern.compile("^[Yy]\$", Pattern.CASE_INSENSITIVE)
+  private static final String TRUTH_REGEX = "^[Yy]"
+  private static final Pattern TRUTH_PATTERN = Pattern.compile(TRUTH_REGEX, Pattern.CASE_INSENSITIVE)
+  private static final String DELETED_MARKER = "<DELETED>"
 
   static engine = new GStringTemplateEngine()
 
@@ -80,11 +82,14 @@ class FileUtils {
 
     List<File> generatedFiles = []
     Path sourceDirPath = templateDir.toPath()
-    templates.each { source ->
-      File target = getTargetFile(sourceDirPath, targetDir, source, binding)
-      if (source.isDirectory()) {
+    templates.stream().each { source ->
+      Optional<File> potentialTarget = getTargetFile(sourceDirPath, targetDir, source, binding)
+
+      if (source.isDirectory() || !potentialTarget.isPresent()) {
         return
       }
+
+      File target = potentialTarget.get();
 
       LOGGER.debug('Processing {} -> {}', source, target)
 
@@ -112,12 +117,16 @@ class FileUtils {
     }
   }
 
-  private static File getTargetFile(Path sourceDirPath, File targetDir, File source, Map binding) {
+  private static Optional<File> getTargetFile(Path sourceDirPath, File targetDir, File source, Map binding) {
     Path sourcePath = sourceDirPath.relativize(source.toPath())
     String rawTargetPath = new File(targetDir, resolvePaths(sourcePath)).path
     rawTargetPath = rawTargetPath.replaceAll("\\\\", "/")
     String resolvedTargetPath = engine.createTemplate(rawTargetPath).make(binding)
-    new File(resolvedTargetPath)
+    if (resolvedTargetPath.contains(DELETED_MARKER)) {
+      Optional.empty()
+    } else {
+      Optional.of(new File(resolvedTargetPath))
+    }
   }
 
   private static void generateFromNonTemplate(File source, File target) {
@@ -184,13 +193,13 @@ class FileUtils {
       ifBlockExpanded.append(text.substring(lastMatchPos, m.start()))
       String keyForIfBlock = m.group(1)
 
-      if(evaluateIfClause(keyForIfBlock, bindings)) {
+      if (evaluateIfClause(keyForIfBlock, bindings)) {
         String ifBlockText = m.group(2)
         ifBlockExpanded.append(ifBlockText)
       }
       lastMatchPos = m.end()
     }
-    if(lastMatchPos != text.length()) {
+    if (lastMatchPos != text.length()) {
       ifBlockExpanded.append(text.substring(lastMatchPos))
     }
     ifBlockExpanded.toString()
@@ -199,9 +208,9 @@ class FileUtils {
   private static boolean evaluateIfClause(String ifClause, Map bindings) {
     String ifClauseBinding = bindings.get(ifClause.trim())
 
-    if(StringUtils.isNotEmpty(bindings.get(ifClause.trim()))) {
+    if (StringUtils.isNotEmpty(bindings.get(ifClause.trim()))) {
       return ifClauseBinding.matches(TRUTH_PATTERN)
-    } else if(ifClause.startsWith('!') && StringUtils.isNotEmpty(bindings.get(ifClause.trim().substring(1)))) {
+    } else if (ifClause.startsWith('!') && StringUtils.isNotEmpty(bindings.get(ifClause.trim().substring(1)))) {
       return !bindings.get(ifClause.trim().substring(1)).matches(TRUTH_PATTERN)
     } else {
       try {
@@ -239,7 +248,8 @@ class FileUtils {
 
   // replaces "__variable__" (used in directory/file names) with "${variable}"
   static String resolvePath(String path) {
+    path = path.replaceAll('(.*)__IF_(\\w+)__(.*)', '$1\\${$2.matches(\'' + TRUTH_REGEX +
+            '\') ? \'\' : \'' + DELETED_MARKER + '\'}$3')
     path.replaceAll('(.*)__([^{}/\\\\@\\n,]+)__(.*)', '$1\\$\\{$2\\}$3')
   }
-
 }
