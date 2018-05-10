@@ -3,6 +3,7 @@ package com.orctom.gradle.archetype.util
 import com.orctom.gradle.archetype.ArchetypePlugin
 import groovy.io.FileType
 import groovy.text.GStringTemplateEngine
+import org.apache.commons.lang.StringUtils
 import org.gradle.api.logging.Logger
 import org.gradle.api.logging.Logging
 
@@ -10,10 +11,15 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
 import java.nio.file.StandardCopyOption
+import java.util.regex.Matcher
+import java.util.regex.Pattern
 
 class FileUtils {
 
   static final Logger LOGGER = Logging.getLogger(FileUtils.class)
+  private static final String TRUTH_REGEX = "^[Yy]"
+  private static final Pattern TRUTH_PATTERN = Pattern.compile(TRUTH_REGEX, Pattern.CASE_INSENSITIVE)
+  private static final String DELETED_MARKER = "<DELETED>"
 
   static engine = new GStringTemplateEngine()
 
@@ -76,11 +82,14 @@ class FileUtils {
 
     List<File> generatedFiles = []
     Path sourceDirPath = templateDir.toPath()
-    templates.each { source ->
-      File target = getTargetFile(sourceDirPath, targetDir, source, binding)
-      if (source.isDirectory()) {
+    templates.stream().each { source ->
+      Optional<File> potentialTarget = getTargetFile(sourceDirPath, targetDir, source, binding)
+
+      if (source.isDirectory() || !potentialTarget.isPresent()) {
         return
       }
+
+      File target = potentialTarget.get();
 
       LOGGER.debug('Processing {} -> {}', source, target)
 
@@ -108,12 +117,16 @@ class FileUtils {
     }
   }
 
-  private static File getTargetFile(Path sourceDirPath, File targetDir, File source, Map binding) {
+  private static Optional<File> getTargetFile(Path sourceDirPath, File targetDir, File source, Map binding) {
     Path sourcePath = sourceDirPath.relativize(source.toPath())
     String rawTargetPath = new File(targetDir, resolvePaths(sourcePath)).path
     rawTargetPath = rawTargetPath.replaceAll("\\\\", "/")
     String resolvedTargetPath = engine.createTemplate(rawTargetPath).make(binding)
-    new File(resolvedTargetPath)
+    if (resolvedTargetPath.contains(DELETED_MARKER)) {
+      Optional.empty()
+    } else {
+      Optional.of(new File(resolvedTargetPath))
+    }
   }
 
   private static void generateFromNonTemplate(File source, File target) {
@@ -143,10 +156,71 @@ class FileUtils {
   }
 
   static String resolve(String text, Map binding) {
-    String escaped = escape(text)
-    String ready = escaped.replaceAll('@([^{}/\\\\@\\n,\\s]+)@', '\\$\\{$1\\}')
-    String resolved = engine.createTemplate(ready).make(binding)
-    unescape(resolved)
+    String latestText = escape(text)
+
+    String previouslyExpanded
+
+    while(!latestText.equals(previouslyExpanded)) {
+      previouslyExpanded = latestText
+      latestText = expandInlineIfBlocks(latestText, binding)
+      latestText = expandMultilineIfBlocks(latestText, binding)
+      latestText = expandVariables(latestText, binding)
+    }
+    latestText = engine.createTemplate(latestText).make(binding).toString()
+    unescape(latestText)
+  }
+
+  private static String expandVariables(String text, Map bindings) {
+    text.replaceAll('@([^{}/\\\\@\\n,\\s]+)@', '\\$\\{$1\\}')
+  }
+
+  private static String expandInlineIfBlocks(String text, Map bindings) {
+    Pattern p = Pattern.compile("@IF\\s*\\(\\s*([^{}/\\\\@\\n,\\s]+)\\s*\\)@([^\\n]*)@ENDIF@", Pattern.DOTALL)
+    expandIfBlocks(p, text, bindings)
+  }
+
+  private static String expandMultilineIfBlocks(String text, Map bindings) {
+    Pattern p = Pattern.compile("@IF\\s*\\(\\s*([^{}/\\\\@\\n,\\s]+)\\s*\\)@\\n?(.*)@ENDIF@\\n?", Pattern.DOTALL)
+    expandIfBlocks(p, text, bindings)
+  }
+
+  private static String expandIfBlocks(Pattern p, String text, Map bindings) {
+    Matcher m = p.matcher(text)
+
+    final StringBuffer ifBlockExpanded = new StringBuffer()
+    int lastMatchPos = 0
+    while (m.find()) {
+      ifBlockExpanded.append(text.substring(lastMatchPos, m.start()))
+      String keyForIfBlock = m.group(1)
+
+      if (evaluateIfClause(keyForIfBlock, bindings)) {
+        String ifBlockText = m.group(2)
+        ifBlockExpanded.append(ifBlockText)
+      }
+      lastMatchPos = m.end()
+    }
+    if (lastMatchPos != text.length()) {
+      ifBlockExpanded.append(text.substring(lastMatchPos))
+    }
+    ifBlockExpanded.toString()
+  }
+
+  private static boolean evaluateIfClause(String ifClause, Map bindings) {
+    String ifClauseBinding = bindings.get(ifClause.trim())
+
+    if (StringUtils.isNotEmpty(bindings.get(ifClause.trim()))) {
+      return ifClauseBinding.matches(TRUTH_PATTERN)
+    } else if (ifClause.startsWith('!') && StringUtils.isNotEmpty(bindings.get(ifClause.trim().substring(1)))) {
+      return !bindings.get(ifClause.trim().substring(1)).matches(TRUTH_PATTERN)
+    } else {
+      try {
+        def evaluationClause = '${' + ifClause + ' ? \'true\' : \'\'}'
+        def evaluation = engine.createTemplate(evaluationClause).make(bindings).toString()
+        return ('true' == evaluation)
+      } catch (MissingPropertyException e) {
+        return false
+      }
+    }
   }
 
   private static String escape(String text) {
@@ -174,7 +248,8 @@ class FileUtils {
 
   // replaces "__variable__" (used in directory/file names) with "${variable}"
   static String resolvePath(String path) {
+    path = path.replaceAll('(.*)__IF_(\\w+)__(.*)', '$1\\${$2.matches(\'' + TRUTH_REGEX +
+            '\') ? \'\' : \'' + DELETED_MARKER + '\'}$3')
     path.replaceAll('(.*)__([^{}/\\\\@\\n,]+)__(.*)', '$1\\$\\{$2\\}$3')
   }
-
 }
