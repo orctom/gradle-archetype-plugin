@@ -47,7 +47,9 @@ class ArchetypeGenerateTask extends DefaultTask {
         'project.version': projectVersion
     ]
 
-    bindingsToPrompt.each{ key, defaultValue -> this.class.getParam(key, "Please enter " + key, defaultValue) }
+    binding << bindingsToPrompt.collectEntries { key, defaultValue -> 
+      [ (key): this.class.getParam(key, "Please enter ${key}", defaultValue) ]
+    }
 
     extendedBinding(binding)
 
