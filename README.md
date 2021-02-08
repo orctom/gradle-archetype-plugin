@@ -1,3 +1,5 @@
+# [LOOK FOR NEW MAINTAINER]
+
 ## gradle-archetype-plugin [![Build Status](https://travis-ci.org/orctom/gradle-archetype-plugin.svg)](https://travis-ci.org/orctom/gradle-archetype-plugin)
 
 Maven archetype like plugin for Gradle.
