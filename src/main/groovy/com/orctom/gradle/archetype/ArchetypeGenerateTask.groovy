@@ -5,6 +5,7 @@ import com.orctom.gradle.archetype.util.FileUtils
 import org.gradle.api.DefaultTask
 import org.gradle.api.logging.Logger
 import org.gradle.api.logging.Logging
+import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.TaskAction
 
 import java.util.regex.Pattern
@@ -146,11 +147,13 @@ class ArchetypeGenerateTask extends DefaultTask {
   }
 
   @Override
+  @Internal
   String getGroup() {
     'Archetype'
   }
 
   @Override
+  @Internal
   String getDescription() {
     'Generates project(s) from template(s)'
   }

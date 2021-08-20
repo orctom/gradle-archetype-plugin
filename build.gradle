@@ -2,12 +2,12 @@ plugins {
   id "com.gradle.plugin-publish" version "0.9.7"
 }
 plugins {
-  id 'net.researchgate.release' version '2.3.4'
+  id 'net.researchgate.release' version '2.8.1'
 }
 
 apply plugin: 'groovy'
 apply plugin: 'java-gradle-plugin'
-apply plugin: 'maven'
+apply plugin: 'maven-publish'
 apply plugin: 'idea'
 
 repositories {
@@ -17,8 +17,8 @@ repositories {
 }
 
 dependencies {
-  compile gradleApi()
-  compile localGroovy()
+  implementation gradleApi()
+  implementation localGroovy()
 }
 
 pluginBundle {
