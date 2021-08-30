@@ -156,6 +156,9 @@ https://github.com/orctom/gradle-archetype-plugin/tree/master/src/test/resources
  * In interactive mode, the prompt text got truncated sometimes.
 
 ### Change Logs
+#### 2.0.0
+ * [#41](https://github.com/orctom/gradle-archetype-plugin/pull/41) Plugin does not work with Gradle 7.x
+
 #### 1.4.8
  * [#29](https://github.com/orctom/gradle-archetype-plugin/pull/29) Add custom variable prompting functionality
 
